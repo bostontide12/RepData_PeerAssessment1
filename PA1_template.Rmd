@@ -1,25 +1,144 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Course Project 1"
+author: "Josh"
+date: "10/18/2020"
+output: html_document
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 
 ## Loading and preprocessing the data
 
+The first step in loading the data: 
 
+```{r}
+cls = c("integer", "character", "integer")
+activity <- read.csv("activity.csv", head=TRUE, colClasses = cls, na.strings = "NA")
+head(activity)
+```
+
+Next I will be changing up the data for later analysis:
+
+```{r}
+activity$date <- as.Date(activity$date)
+activity_na <- subset(activity, !is.na(activity$steps))
+```
 
 ## What is mean total number of steps taken per day?
 
+Here I will be showing a histogram of the daily total number of steps taken:
 
+```{r}
+dailysum <- tapply(activity_na$steps, activity_na$date, sum, na.rm=TRUE, simplify=T)
+dailysum <- dailysum[!is.na(dailysum)]
+
+hist(x=dailysum,
+     col="red",
+     breaks=20,
+     xlab="Daily total steps",
+     ylab="Daily",
+     main="The distribution of daily total")
+```
+
+Next, I will find the mean and median:
+
+```{r}
+mean(dailysum)
+median(dailysum)
+```
 
 ## What is the average daily activity pattern?
 
+To find this, we create a time series plot (i.e. type = “l”) of the 5-minute interval and the average number of steps taken, averaged across all days:
 
+```{r}
+average_integer <- tapply(activity_na$steps, activity_na$interval, mean, 
+                          na.rm=TRUE, simplify=T)
+activity_integer_average <- data.frame(interval=as.integer(names(average_integer)), 
+                                       avg=average_integer)
+
+with(activity_integer_average,
+     plot(interval,
+                 avg,
+                 type="l",
+                 xlab="5-minute intervals",
+                 ylab="Average Steps"))
+```
+
+Which of these contains the max number of steps?
+
+``` {r}
+max_steps <- max(activity_integer_average$avg)
+activity_integer_average[activity_integer_average$avg == max_steps, ]
+```
 
 ## Imputing missing values
 
+Lets see how many there are in this dataset:
 
+```{r}
+sum(is.na(activity$steps))
+```
+
+We will create a new data frame with the missing data filled in. We will use the mean for that 5 minute interval.
+
+```{r}
+activity_impute <- activity
+activitysteps_na <- is.na(activity_impute$steps)
+integer_average <- tapply(activity_na$steps, activity_na$interval, mean, 
+                          na.rm=TRUE, simplify=T)
+activity_impute$steps[activitysteps_na] <- 
+        integer_average[as.character(activity_impute$interval[activitysteps_na])]
+```
+
+Here is a histogram of the total steps per day:
+
+```{r}
+new_dailysum <- tapply(activity_impute$steps, activity_impute$date, sum, na.rm=TRUE, simplify=T)
+hist(x=new_dailysum,
+       col="red",
+       breaks=20,
+       xlab="Daily Steps",
+       ylab="Daily",
+       main="The distribution of daily total")
+```
+
+See below for the mean and median
+
+```{r}
+mean(new_dailysum)
+median(new_dailysum)
+```
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+We'll first need to create a new factor variable "week" to assign each to weekday or weekend:
+
+```{r}
+is_weekday <- function(d) {
+                wd <- weekdays(d)
+                ifelse (wd == "Saturday" | wd == "Sunday", "weekend", "weekday")
+        }
+
+weekday_run <- sapply(activity_impute$date, is_weekday)
+activity_impute$week <- as.factor(weekday_run)
+head(activity_impute)
+```
+
+Next, we plot weekday and weekend to get a visual of the average number of steps taken:
+
+```{r}
+week_activity <- aggregate(steps ~ week+interval, data=activity_impute, FUN=mean)
+library(lattice)
+xyplot(steps ~ interval | factor(week),
+         layout = c(1, 2),
+         xlab="Interval",
+         ylab="Number of steps",
+         type="l",
+         lty=1,
+         data=week_activity)
+```
+
+There appears to be some differences in the two. The times they started to walk was much higher for weekday, while weekend has a more balanced start time.
